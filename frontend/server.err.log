@@ -1,0 +1,6 @@
+(node:15372) ExperimentalWarning: CommonJS module C:\Users\khush\OneDrive\task_managment\frontend\vite.config.js is loading ES Module C:\Users\khush\OneDrive\task_managment\frontend\node_modules\vite\dist\node\index.js using require().
+Support for loading ES Module in require() is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15372) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///C:/Users/khush/OneDrive/task_managment/frontend/postcss.config.js?t=1786124231212 is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to C:\Users\khush\OneDrive\task_managment\frontend\package.json.
