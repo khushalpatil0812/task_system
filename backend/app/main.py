@@ -13,12 +13,19 @@ from .auth import hash_password, verify_password, create_token, current_user, ad
 load_dotenv()
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Team Task Manager API", version="1.0.0")
-origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+origins = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173",
+).split(",")
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 def project_query(db): return db.query(Project).options(joinedload(Project.members))
 def task_query(db): return db.query(Task).options(joinedload(Task.assignee), joinedload(Task.project).joinedload(Project.members))
 def accessible_project(project, user): return user.role == Role.admin or any(m.id == user.id for m in project.members)
+def validate_assignee(db, project, assigned_to):
+    if assigned_to is None: return
+    if not db.get(User, assigned_to) or not any(member.id == assigned_to for member in project.members):
+        raise HTTPException(400, "Assignee must be a member of the project")
 
 @app.get("/api/health")
 def health(): return {"status": "ok"}
@@ -36,6 +43,12 @@ def login(data: Login, db: Session = Depends(get_db)):
     return Token(access_token=create_token(user), user=user)
 @app.get("/api/users", response_model=list[UserOut])
 def users(_: User = Depends(admin_user), db: Session = Depends(get_db)): return db.query(User).order_by(User.name).all()
+@app.post("/api/users", response_model=UserOut, status_code=201)
+def create_member(data: MemberCreate, _: User = Depends(admin_user), db: Session = Depends(get_db)):
+    if db.query(User).filter(User.email == data.email).first(): raise HTTPException(409, "Email already registered")
+    member = User(name=data.name, email=data.email, password=hash_password(data.password), role=Role.member)
+    db.add(member); db.commit(); db.refresh(member)
+    return member
 @app.get("/api/profile", response_model=UserOut)
 def profile(user: User = Depends(current_user)): return user
 @app.put("/api/profile", response_model=UserOut)
@@ -77,7 +90,9 @@ def tasks(status_filter:TaskStatus|None=None, priority:str|None=None, search:str
     return sorted(items,key=lambda t:t.due_date or date.max)
 @app.post("/api/tasks", response_model=TaskOut, status_code=201)
 def create_task(data:TaskCreate, _:User=Depends(admin_user), db:Session=Depends(get_db)):
-    if not db.get(Project,data.project_id): raise HTTPException(404,"Project not found")
+    project=project_query(db).get(data.project_id)
+    if not project: raise HTTPException(404,"Project not found")
+    validate_assignee(db, project, data.assigned_to)
     t=Task(**data.model_dump()); db.add(t); db.commit(); return task_query(db).get(t.id)
 @app.put("/api/tasks/{task_id}", response_model=TaskOut)
 def update_task(task_id:int,data:TaskUpdate,user:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -86,6 +101,10 @@ def update_task(task_id:int,data:TaskUpdate,user:User=Depends(current_user),db:S
     if user.role!=Role.admin and t.assigned_to!=user.id: raise HTTPException(403,"You can only update assigned tasks")
     values=data.model_dump(exclude_unset=True)
     if user.role!=Role.admin: values={k:v for k,v in values.items() if k=="status"}
+    if user.role==Role.admin and ("project_id" in values or "assigned_to" in values):
+        project=project_query(db).get(values.get("project_id", t.project_id))
+        if not project: raise HTTPException(404,"Project not found")
+        validate_assignee(db, project, values.get("assigned_to", t.assigned_to))
     for k,v in values.items(): setattr(t,k,v)
     db.commit(); return task_query(db).get(task_id)
 @app.delete("/api/tasks/{task_id}",status_code=204)

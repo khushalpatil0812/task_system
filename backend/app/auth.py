@@ -16,7 +16,7 @@ def hash_password(value: str): return pwd.hash(value)
 def verify_password(value: str, hashed: str): return pwd.verify(value, hashed)
 def create_token(user: User):
     expiry = datetime.now(timezone.utc) + timedelta(minutes=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440")))
-    return jwt.encode({"sub": str(user.id), "exp": expiry}, SECRET, algorithm=ALGORITHM)
+    return jwt.encode({"sub": str(user.id), "role": user.role.value, "exp": expiry}, SECRET, algorithm=ALGORITHM)
 def current_user(token: str = Depends(oauth2), db: Session = Depends(get_db)):
     try: user_id = int(jwt.decode(token, SECRET, algorithms=[ALGORITHM]).get("sub"))
     except (JWTError, TypeError, ValueError): raise HTTPException(status_code=401, detail="Invalid or expired token")

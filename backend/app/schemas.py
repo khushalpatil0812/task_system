@@ -7,6 +7,10 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
     role: Role = Role.member
+class MemberCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    password: str = Field(min_length=8)
 class Login(BaseModel): email: EmailStr; password: str
 class UserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
